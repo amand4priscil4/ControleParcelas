@@ -1,90 +1,112 @@
 let db;
 let dbReady = false;
 
-// Inicializar SQL.js e banco de dados
-async function initDB() {
-    try {
-        console.log('🔄 Inicializando SQL.js...');
-        const SQL = await initSqlJs({
-            locateFile: file => `https://sql.js.org/dist/${file}`
-        });
-        console.log('✅ SQL.js carregado');
+// Inicializar IndexedDB
+function initDB() {
+    return new Promise((resolve, reject) => {
+        console.log('🔄 Inicializando IndexedDB...');
+        const request = indexedDB.open('ParcelasDB', 1);
 
-        // Tentar carregar banco existente do localStorage
-        const savedDB = localStorage.getItem('parcelasDB');
-        if (savedDB) {
-            console.log('📂 Carregando banco existente...');
-            const uInt8Array = new Uint8Array(JSON.parse(savedDB));
-            db = new SQL.Database(uInt8Array);
-        } else {
-            console.log('🆕 Criando novo banco...');
-            db = new SQL.Database();
-            criarTabelas();
-        }
-        
-        dbReady = true;
-        console.log('✅ Banco de dados pronto!');
-        
-        // Inicializar interface após o banco estar pronto
-        inicializarInterface();
-    } catch (error) {
-        console.error('❌ Erro ao inicializar banco:', error);
-        alert('Erro ao inicializar o sistema. Recarregue a página.');
-    }
+        request.onerror = () => {
+            console.error('❌ Erro ao abrir banco');
+            reject(request.error);
+        };
+
+        request.onsuccess = () => {
+            db = request.result;
+            dbReady = true;
+            console.log('✅ Banco de dados pronto!');
+            resolve(db);
+        };
+
+        request.onupgradeneeded = (event) => {
+            console.log('🆕 Criando estrutura do banco...');
+            const db = event.target.result;
+
+            // Store de Pessoas
+            if (!db.objectStoreNames.contains('pessoas')) {
+                const pessoasStore = db.createObjectStore('pessoas', { keyPath: 'id', autoIncrement: true });
+                pessoasStore.createIndex('nome', 'nome', { unique: false });
+            }
+
+            // Store de Cartões
+            if (!db.objectStoreNames.contains('cartoes')) {
+                const cartoesStore = db.createObjectStore('cartoes', { keyPath: 'id', autoIncrement: true });
+                cartoesStore.createIndex('nome', 'nome', { unique: false });
+            }
+
+            // Store de Compras
+            if (!db.objectStoreNames.contains('compras')) {
+                const comprasStore = db.createObjectStore('compras', { keyPath: 'id', autoIncrement: true });
+                comprasStore.createIndex('pessoa_id', 'pessoa_id', { unique: false });
+                comprasStore.createIndex('cartao_id', 'cartao_id', { unique: false });
+                comprasStore.createIndex('data_compra', 'data_compra', { unique: false });
+            }
+
+            console.log('✅ Estrutura criada!');
+        };
+    });
 }
 
-// Criar estrutura do banco
-function criarTabelas() {
-    try {
-        db.run(`
-            CREATE TABLE IF NOT EXISTS pessoas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL
-            )
-        `);
+// Funções auxiliares do IndexedDB
+function addItem(storeName, item) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.add(item);
 
-        db.run(`
-            CREATE TABLE IF NOT EXISTS cartoes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL,
-                bandeira TEXT
-            )
-        `);
-
-        db.run(`
-            CREATE TABLE IF NOT EXISTS compras (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pessoa_id INTEGER NOT NULL,
-                cartao_id INTEGER NOT NULL,
-                descricao TEXT NOT NULL,
-                valor_total REAL NOT NULL,
-                num_parcelas INTEGER NOT NULL,
-                data_compra DATE NOT NULL,
-                FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
-                FOREIGN KEY (cartao_id) REFERENCES cartoes(id)
-            )
-        `);
-
-        console.log('✅ Tabelas criadas');
-        salvarDB();
-    } catch (error) {
-        console.error('❌ Erro ao criar tabelas:', error);
-    }
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
 }
 
-// Salvar banco no localStorage
-function salvarDB() {
-    try {
-        const data = db.export();
-        const buffer = JSON.stringify(Array.from(data));
-        localStorage.setItem('parcelasDB', buffer);
-    } catch (error) {
-        console.error('❌ Erro ao salvar banco:', error);
-    }
+function getAll(storeName) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
 }
 
-// Inicializar interface apenas quando o banco estiver pronto
-function inicializarInterface() {
+function getById(storeName, id) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.get(id);
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function deleteItem(storeName, id) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.delete(id);
+
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function countByIndex(storeName, indexName, value) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readonly');
+        const store = transaction.objectStore(storeName);
+        const index = store.index(indexName);
+        const request = index.count(value);
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Inicializar interface
+async function inicializarInterface() {
     // Sistema de abas
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -99,201 +121,170 @@ function inicializarInterface() {
     });
 
     // CADASTRO DE PESSOAS
-    const formPessoa = document.getElementById('form-pessoa');
-    if (formPessoa) {
-        formPessoa.addEventListener('submit', (e) => {
-            e.preventDefault();
-            
-            if (!dbReady) {
-                alert('⏳ Aguarde o sistema inicializar...');
-                return;
+    document.getElementById('form-pessoa').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!dbReady) {
+            alert('⏳ Aguarde o sistema inicializar...');
+            return;
+        }
+        
+        const nome = document.getElementById('nome-pessoa').value.trim();
+        
+        if (nome) {
+            try {
+                await addItem('pessoas', { nome });
+                document.getElementById('nome-pessoa').value = '';
+                await listarPessoas();
+                await carregarSelectPessoas();
+                alert('✅ Pessoa cadastrada com sucesso!');
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert('❌ Erro ao cadastrar pessoa');
             }
-            
-            const nome = document.getElementById('nome-pessoa').value.trim();
-            
-            if (nome) {
-                try {
-                    db.run('INSERT INTO pessoas (nome) VALUES (?)', [nome]);
-                    salvarDB();
-                    
-                    document.getElementById('nome-pessoa').value = '';
-                    listarPessoas();
-                    carregarSelectPessoas();
-                    
-                    alert('✅ Pessoa cadastrada com sucesso!');
-                } catch (error) {
-                    console.error('❌ Erro:', error);
-                    alert('❌ Erro ao cadastrar pessoa');
-                }
-            }
-        });
-    }
+        }
+    });
 
     // CADASTRO DE CARTÕES
-    const formCartao = document.getElementById('form-cartao');
-    if (formCartao) {
-        formCartao.addEventListener('submit', (e) => {
-            e.preventDefault();
-            
-            if (!dbReady) {
-                alert('⏳ Aguarde o sistema inicializar...');
-                return;
+    document.getElementById('form-cartao').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!dbReady) {
+            alert('⏳ Aguarde o sistema inicializar...');
+            return;
+        }
+        
+        const nome = document.getElementById('nome-cartao').value.trim();
+        const bandeira = document.getElementById('bandeira-cartao').value;
+        
+        if (nome) {
+            try {
+                await addItem('cartoes', { nome, bandeira });
+                document.getElementById('form-cartao').reset();
+                await listarCartoes();
+                await carregarSelectCartoes();
+                alert('✅ Cartão cadastrado com sucesso!');
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert('❌ Erro ao cadastrar cartão');
             }
-            
-            const nome = document.getElementById('nome-cartao').value.trim();
-            const bandeira = document.getElementById('bandeira-cartao').value;
-            
-            if (nome) {
-                try {
-                    db.run('INSERT INTO cartoes (nome, bandeira) VALUES (?, ?)', [nome, bandeira]);
-                    salvarDB();
-                    
-                    document.getElementById('form-cartao').reset();
-                    listarCartoes();
-                    carregarSelectCartoes();
-                    
-                    alert('✅ Cartão cadastrado com sucesso!');
-                } catch (error) {
-                    console.error('❌ Erro:', error);
-                    alert('❌ Erro ao cadastrar cartão');
-                }
-            }
-        });
-    }
+        }
+    });
 
     // CADASTRO DE COMPRAS
-    const formCompra = document.getElementById('form-compra');
-    if (formCompra) {
-        formCompra.addEventListener('submit', (e) => {
-            e.preventDefault();
-            
-            if (!dbReady) {
-                alert('⏳ Aguarde o sistema inicializar...');
-                return;
+    document.getElementById('form-compra').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!dbReady) {
+            alert('⏳ Aguarde o sistema inicializar...');
+            return;
+        }
+        
+        const pessoa_id = parseInt(document.getElementById('pessoa-select').value);
+        const cartao_id = parseInt(document.getElementById('cartao-select').value);
+        const descricao = document.getElementById('descricao').value.trim();
+        const valor_total = parseFloat(document.getElementById('valor').value);
+        const num_parcelas = parseInt(document.getElementById('parcelas').value);
+        const data_compra = document.getElementById('data-compra').value;
+        
+        if (pessoa_id && cartao_id && descricao && valor_total && num_parcelas && data_compra) {
+            try {
+                await addItem('compras', {
+                    pessoa_id,
+                    cartao_id,
+                    descricao,
+                    valor_total,
+                    num_parcelas,
+                    data_compra
+                });
+                
+                document.getElementById('form-compra').reset();
+                document.getElementById('data-compra').valueAsDate = new Date();
+                await listarCompras();
+                alert('✅ Compra cadastrada com sucesso!');
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert('❌ Erro ao cadastrar compra');
             }
-            
-            const pessoaId = document.getElementById('pessoa-select').value;
-            const cartaoId = document.getElementById('cartao-select').value;
-            const descricao = document.getElementById('descricao').value.trim();
-            const valor = parseFloat(document.getElementById('valor').value);
-            const parcelas = parseInt(document.getElementById('parcelas').value);
-            const dataCompra = document.getElementById('data-compra').value;
-            
-            if (pessoaId && cartaoId && descricao && valor && parcelas && dataCompra) {
-                try {
-                    db.run(
-                        'INSERT INTO compras (pessoa_id, cartao_id, descricao, valor_total, num_parcelas, data_compra) VALUES (?, ?, ?, ?, ?, ?)',
-                        [pessoaId, cartaoId, descricao, valor, parcelas, dataCompra]
-                    );
-                    salvarDB();
-                    
-                    document.getElementById('form-compra').reset();
-                    document.getElementById('data-compra').valueAsDate = new Date();
-                    listarCompras();
-                    
-                    alert('✅ Compra cadastrada com sucesso!');
-                } catch (error) {
-                    console.error('❌ Erro:', error);
-                    alert('❌ Erro ao cadastrar compra');
-                }
-            }
-        });
-    }
+        }
+    });
 
     // Filtro de mês
-    const filtroMes = document.getElementById('filtro-mes');
-    if (filtroMes) {
-        filtroMes.addEventListener('change', (e) => {
-            const mes = e.target.value;
-            listarCompras(mes);
-        });
-    }
+    document.getElementById('filtro-mes').addEventListener('change', async (e) => {
+        await listarCompras(e.target.value);
+    });
 
-    const btnLimparFiltro = document.getElementById('btn-limpar-filtro');
-    if (btnLimparFiltro) {
-        btnLimparFiltro.addEventListener('click', () => {
-            document.getElementById('filtro-mes').value = '';
-            listarCompras();
-        });
-    }
+    document.getElementById('btn-limpar-filtro').addEventListener('click', async () => {
+        document.getElementById('filtro-mes').value = '';
+        await listarCompras();
+    });
 
     // RELATÓRIO
-    const relatorioMes = document.getElementById('relatorio-mes');
-    if (relatorioMes) {
-        relatorioMes.addEventListener('change', (e) => {
-            gerarRelatorio(e.target.value);
-        });
-    }
+    document.getElementById('relatorio-mes').addEventListener('change', async (e) => {
+        await gerarRelatorio(e.target.value);
+    });
 
-    // Setar data de hoje no campo de data
-    const dataCompra = document.getElementById('data-compra');
-    if (dataCompra) {
-        dataCompra.valueAsDate = new Date();
-    }
+    // Setar data de hoje
+    document.getElementById('data-compra').valueAsDate = new Date();
 
     // Setar mês atual no relatório
     const hoje = new Date();
     const mesAtual = hoje.toISOString().slice(0, 7);
-    if (relatorioMes) {
-        relatorioMes.value = mesAtual;
-    }
+    document.getElementById('relatorio-mes').value = mesAtual;
 
     // Carregar dados iniciais
-    listarPessoas();
-    listarCartoes();
-    carregarSelectPessoas();
-    carregarSelectCartoes();
-    listarCompras();
-    gerarRelatorio(mesAtual);
+    await listarPessoas();
+    await listarCartoes();
+    await carregarSelectPessoas();
+    await carregarSelectCartoes();
+    await listarCompras();
+    await gerarRelatorio(mesAtual);
 }
 
 // Listar pessoas
-function listarPessoas() {
+async function listarPessoas() {
     if (!dbReady) return;
     
     const lista = document.getElementById('lista-pessoas');
-    if (!lista) return;
-    
     try {
-        const result = db.exec('SELECT * FROM pessoas ORDER BY nome');
+        const pessoas = await getAll('pessoas');
+        pessoas.sort((a, b) => a.nome.localeCompare(b.nome));
         
-        if (result.length === 0 || result[0].values.length === 0) {
+        if (pessoas.length === 0) {
             lista.innerHTML = '<div class="empty-state">👥 Nenhuma pessoa cadastrada ainda<p>Comece adicionando as pessoas que fazem compras!</p></div>';
             return;
         }
         
         lista.innerHTML = '';
-        result[0].values.forEach(([id, nome]) => {
+        pessoas.forEach(pessoa => {
             const div = document.createElement('div');
             div.className = 'pessoa-item';
             div.innerHTML = `
-                <span class="pessoa-nome">👤 ${nome}</span>
-                <button class="btn btn-danger" onclick="excluirPessoa(${id})">Excluir</button>
+                <span class="pessoa-nome">👤 ${pessoa.nome}</span>
+                <button class="btn btn-danger" onclick="excluirPessoa(${pessoa.id})">Excluir</button>
             `;
             lista.appendChild(div);
         });
     } catch (error) {
-        console.error('❌ Erro ao listar pessoas:', error);
+        console.error('❌ Erro:', error);
     }
 }
 
 // Excluir pessoa
-function excluirPessoa(id) {
+async function excluirPessoa(id) {
     if (!dbReady) return;
     
     if (confirm('Tem certeza que deseja excluir esta pessoa?')) {
         try {
-            // Verificar se tem compras
-            const compras = db.exec('SELECT COUNT(*) FROM compras WHERE pessoa_id = ?', [id]);
-            if (compras[0].values[0][0] > 0) {
+            const count = await countByIndex('compras', 'pessoa_id', id);
+            if (count > 0) {
                 alert('⚠️ Não é possível excluir. Esta pessoa possui compras cadastradas.');
                 return;
             }
             
-            db.run('DELETE FROM pessoas WHERE id = ?', [id]);
-            salvarDB();
-            listarPessoas();
-            carregarSelectPessoas();
+            await deleteItem('pessoas', id);
+            await listarPessoas();
+            await carregarSelectPessoas();
         } catch (error) {
             console.error('❌ Erro:', error);
             alert('❌ Erro ao excluir pessoa');
@@ -302,77 +293,70 @@ function excluirPessoa(id) {
 }
 
 // Carregar select de pessoas
-function carregarSelectPessoas() {
+async function carregarSelectPessoas() {
     if (!dbReady) return;
     
     const select = document.getElementById('pessoa-select');
-    if (!select) return;
-    
     try {
-        const result = db.exec('SELECT * FROM pessoas ORDER BY nome');
+        const pessoas = await getAll('pessoas');
+        pessoas.sort((a, b) => a.nome.localeCompare(b.nome));
         
         select.innerHTML = '<option value="">Selecione...</option>';
-        
-        if (result.length > 0) {
-            result[0].values.forEach(([id, nome]) => {
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = nome;
-                select.appendChild(option);
-            });
-        }
+        pessoas.forEach(pessoa => {
+            const option = document.createElement('option');
+            option.value = pessoa.id;
+            option.textContent = pessoa.nome;
+            select.appendChild(option);
+        });
     } catch (error) {
-        console.error('❌ Erro ao carregar select de pessoas:', error);
+        console.error('❌ Erro:', error);
     }
 }
 
 // Listar cartões
-function listarCartoes() {
+async function listarCartoes() {
     if (!dbReady) return;
     
     const lista = document.getElementById('lista-cartoes');
-    if (!lista) return;
-    
     try {
-        const result = db.exec('SELECT * FROM cartoes ORDER BY nome');
+        const cartoes = await getAll('cartoes');
+        cartoes.sort((a, b) => a.nome.localeCompare(b.nome));
         
-        if (result.length === 0 || result[0].values.length === 0) {
+        if (cartoes.length === 0) {
             lista.innerHTML = '<div class="empty-state">💳 Nenhum cartão cadastrado ainda<p>Adicione os cartões que são usados nas compras!</p></div>';
             return;
         }
         
         lista.innerHTML = '';
-        result[0].values.forEach(([id, nome, bandeira]) => {
+        cartoes.forEach(cartao => {
             const div = document.createElement('div');
             div.className = 'pessoa-item';
             div.innerHTML = `
-                <span class="pessoa-nome">💳 ${nome} ${bandeira ? `<span class="badge badge-primary">${bandeira.toUpperCase()}</span>` : ''}</span>
-                <button class="btn btn-danger" onclick="excluirCartao(${id})">Excluir</button>
+                <span class="pessoa-nome">💳 ${cartao.nome} ${cartao.bandeira ? `<span class="badge badge-primary">${cartao.bandeira.toUpperCase()}</span>` : ''}</span>
+                <button class="btn btn-danger" onclick="excluirCartao(${cartao.id})">Excluir</button>
             `;
             lista.appendChild(div);
         });
     } catch (error) {
-        console.error('❌ Erro ao listar cartões:', error);
+        console.error('❌ Erro:', error);
     }
 }
 
 // Excluir cartão
-function excluirCartao(id) {
+async function excluirCartao(id) {
     if (!dbReady) return;
     
     if (confirm('Tem certeza que deseja excluir este cartão?')) {
         try {
-            // Verificar se tem compras
-            const compras = db.exec('SELECT COUNT(*) FROM compras WHERE cartao_id = ?', [id]);
-            if (compras[0].values[0][0] > 0) {
+            const count = await countByIndex('compras', 'cartao_id', id);
+            if (count > 0) {
                 alert('⚠️ Não é possível excluir. Este cartão possui compras cadastradas.');
                 return;
             }
             
-            db.run('DELETE FROM cartoes WHERE id = ?', [id]);
-            salvarDB();
-            listarCartoes();
-            carregarSelectCartoes();
+            await deleteItem('cartoes', id);
+            await listarCartoes();
+            await carregarSelectCartoes();
         } catch (error) {
             console.error('❌ Erro:', error);
             alert('❌ Erro ao excluir cartão');
@@ -381,56 +365,43 @@ function excluirCartao(id) {
 }
 
 // Carregar select de cartões
-function carregarSelectCartoes() {
+async function carregarSelectCartoes() {
     if (!dbReady) return;
     
     const select = document.getElementById('cartao-select');
-    if (!select) return;
-    
     try {
-        const result = db.exec('SELECT * FROM cartoes ORDER BY nome');
+        const cartoes = await getAll('cartoes');
+        cartoes.sort((a, b) => a.nome.localeCompare(b.nome));
         
         select.innerHTML = '<option value="">Selecione...</option>';
-        
-        if (result.length > 0) {
-            result[0].values.forEach(([id, nome, bandeira]) => {
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = `${nome}${bandeira ? ' (' + bandeira + ')' : ''}`;
-                select.appendChild(option);
-            });
-        }
+        cartoes.forEach(cartao => {
+            const option = document.createElement('option');
+            option.value = cartao.id;
+            option.textContent = `${cartao.nome}${cartao.bandeira ? ' (' + cartao.bandeira + ')' : ''}`;
+            select.appendChild(option);
+        });
     } catch (error) {
-        console.error('❌ Erro ao carregar select de cartões:', error);
+        console.error('❌ Erro:', error);
     }
 }
 
 // Listar compras
-function listarCompras(filtroMes = null) {
+async function listarCompras(filtroMes = null) {
     if (!dbReady) return;
     
     const lista = document.getElementById('lista-compras');
-    if (!lista) return;
-    
     try {
-        let query = `
-            SELECT c.id, c.descricao, c.valor_total, c.num_parcelas, c.data_compra, p.nome, ca.nome, ca.bandeira
-            FROM compras c
-            JOIN pessoas p ON c.pessoa_id = p.id
-            JOIN cartoes ca ON c.cartao_id = ca.id
-        `;
+        let compras = await getAll('compras');
         
-        const params = [];
+        // Filtrar por mês se necessário
         if (filtroMes) {
-            query += ` WHERE strftime('%Y-%m', c.data_compra) = ?`;
-            params.push(filtroMes);
+            compras = compras.filter(c => c.data_compra.startsWith(filtroMes));
         }
         
-        query += ' ORDER BY c.data_compra DESC';
+        // Ordenar por data (mais recente primeiro)
+        compras.sort((a, b) => new Date(b.data_compra) - new Date(a.data_compra));
         
-        const result = db.exec(query, params);
-        
-        if (result.length === 0 || result[0].values.length === 0) {
+        if (compras.length === 0) {
             if (filtroMes) {
                 lista.innerHTML = '<div class="empty-state">🔍 Nenhuma compra encontrada neste mês<p>Tente selecionar outro período ou ver todas as compras.</p></div>';
             } else {
@@ -440,41 +411,44 @@ function listarCompras(filtroMes = null) {
         }
         
         lista.innerHTML = '';
-        result[0].values.forEach(([id, descricao, valorTotal, numParcelas, dataCompra, nomePessoa, nomeCartao, bandeiraCartao]) => {
-            const valorParcela = valorTotal / numParcelas;
-            const dataFormatada = new Date(dataCompra + 'T00:00:00').toLocaleDateString('pt-BR');
+        
+        for (const compra of compras) {
+            const pessoa = await getById('pessoas', compra.pessoa_id);
+            const cartao = await getById('cartoes', compra.cartao_id);
+            
+            const valorParcela = compra.valor_total / compra.num_parcelas;
+            const dataFormatada = new Date(compra.data_compra + 'T00:00:00').toLocaleDateString('pt-BR');
             
             const div = document.createElement('div');
             div.className = 'compra-item';
             div.innerHTML = `
                 <div class="compra-header">
-                    <span class="compra-titulo">🛍️ ${descricao}</span>
-                    <button class="btn btn-danger" onclick="excluirCompra(${id})">Excluir</button>
+                    <span class="compra-titulo">🛍️ ${compra.descricao}</span>
+                    <button class="btn btn-danger" onclick="excluirCompra(${compra.id})">Excluir</button>
                 </div>
-                <div class="compra-info"><strong>👤 Pessoa:</strong> ${nomePessoa}</div>
-                <div class="compra-info"><strong>💳 Cartão:</strong> ${nomeCartao}${bandeiraCartao ? ' <span class="badge badge-primary">' + bandeiraCartao.toUpperCase() + '</span>' : ''}</div>
+                <div class="compra-info"><strong>👤 Pessoa:</strong> ${pessoa?.nome || 'N/A'}</div>
+                <div class="compra-info"><strong>💳 Cartão:</strong> ${cartao?.nome || 'N/A'}${cartao?.bandeira ? ' <span class="badge badge-primary">' + cartao.bandeira.toUpperCase() + '</span>' : ''}</div>
                 <div class="compra-info"><strong>📅 Data:</strong> ${dataFormatada}</div>
                 <div class="parcelas-info">
-                    <div><strong>💰 Valor Total:</strong> R$ ${valorTotal.toFixed(2)}</div>
-                    <div><strong>📊 Parcelas:</strong> ${numParcelas}x de R$ ${valorParcela.toFixed(2)}</div>
+                    <div><strong>💰 Valor Total:</strong> R$ ${compra.valor_total.toFixed(2)}</div>
+                    <div><strong>📊 Parcelas:</strong> ${compra.num_parcelas}x de R$ ${valorParcela.toFixed(2)}</div>
                 </div>
             `;
             lista.appendChild(div);
-        });
+        }
     } catch (error) {
-        console.error('❌ Erro ao listar compras:', error);
+        console.error('❌ Erro:', error);
     }
 }
 
 // Excluir compra
-function excluirCompra(id) {
+async function excluirCompra(id) {
     if (!dbReady) return;
     
     if (confirm('Tem certeza que deseja excluir esta compra?')) {
         try {
-            db.run('DELETE FROM compras WHERE id = ?', [id]);
-            salvarDB();
-            listarCompras();
+            await deleteItem('compras', id);
+            await listarCompras();
         } catch (error) {
             console.error('❌ Erro:', error);
             alert('❌ Erro ao excluir compra');
@@ -483,11 +457,10 @@ function excluirCompra(id) {
 }
 
 // Gerar relatório
-function gerarRelatorio(mes) {
+async function gerarRelatorio(mes) {
     if (!dbReady) return;
     
     const conteudo = document.getElementById('relatorio-conteudo');
-    if (!conteudo) return;
     
     if (!mes) {
         conteudo.innerHTML = '<div class="empty-state">📅 Selecione um mês para ver o relatório<p>Escolha o mês acima para visualizar as parcelas a pagar.</p></div>';
@@ -495,56 +468,44 @@ function gerarRelatorio(mes) {
     }
     
     try {
-        const query = `
-            SELECT p.nome, c.descricao, c.valor_total, c.num_parcelas, c.data_compra, ca.nome, ca.bandeira
-            FROM compras c
-            JOIN pessoas p ON c.pessoa_id = p.id
-            JOIN cartoes ca ON c.cartao_id = ca.id
-            WHERE strftime('%Y-%m', c.data_compra) <= ?
-            ORDER BY p.nome, c.data_compra
-        `;
-        
-        const result = db.exec(query, [mes]);
-        
-        if (result.length === 0 || result[0].values.length === 0) {
-            conteudo.innerHTML = '<div class="empty-state">📊 Nenhuma parcela ativa neste mês<p>Não há compras com parcelas a pagar neste período.</p></div>';
-            return;
-        }
-        
-        // Organizar por pessoa
-        const porPessoa = {};
+        const compras = await getAll('compras');
         const [anoMes, mesSelecionado] = mes.split('-');
+        const mesRelatorio = parseInt(mesSelecionado) - 1;
+        const anoRelatorio = parseInt(anoMes);
         
-        result[0].values.forEach(([nome, descricao, valorTotal, numParcelas, dataCompra, nomeCartao, bandeiraCartao]) => {
-            if (!porPessoa[nome]) {
-                porPessoa[nome] = [];
-            }
-            
-            const dataInicio = new Date(dataCompra + 'T00:00:00');
+        const porPessoa = {};
+        
+        for (const compra of compras) {
+            const dataInicio = new Date(compra.data_compra + 'T00:00:00');
             const mesCompra = dataInicio.getMonth();
             const anoCompra = dataInicio.getFullYear();
             
-            const mesRelatorio = parseInt(mesSelecionado) - 1;
-            const anoRelatorio = parseInt(anoMes);
-            
             const mesesPassados = (anoRelatorio - anoCompra) * 12 + (mesRelatorio - mesCompra);
             
-            if (mesesPassados >= 0 && mesesPassados < numParcelas) {
-                const parcelaAtual = mesesPassados + 1;
-                const valorParcela = valorTotal / numParcelas;
+            if (mesesPassados >= 0 && mesesPassados < compra.num_parcelas) {
+                const pessoa = await getById('pessoas', compra.pessoa_id);
+                const cartao = await getById('cartoes', compra.cartao_id);
                 
-                porPessoa[nome].push({
-                    descricao,
+                if (!pessoa) continue;
+                
+                if (!porPessoa[pessoa.nome]) {
+                    porPessoa[pessoa.nome] = [];
+                }
+                
+                const parcelaAtual = mesesPassados + 1;
+                const valorParcela = compra.valor_total / compra.num_parcelas;
+                
+                porPessoa[pessoa.nome].push({
+                    descricao: compra.descricao,
                     valorParcela,
                     parcelaAtual,
-                    numParcelas,
-                    nomeCartao,
-                    bandeiraCartao
+                    numParcelas: compra.num_parcelas,
+                    nomeCartao: cartao?.nome || 'N/A',
+                    bandeiraCartao: cartao?.bandeira
                 });
             }
-        });
+        }
         
-        // Verificar se há parcelas ativas no mês
         if (Object.keys(porPessoa).length === 0) {
             conteudo.innerHTML = '<div class="empty-state">📊 Nenhuma parcela ativa neste mês<p>Não há compras com parcelas a pagar neste período.</p></div>';
             return;
@@ -583,7 +544,7 @@ function gerarRelatorio(mes) {
         
         conteudo.innerHTML = html;
     } catch (error) {
-        console.error('❌ Erro ao gerar relatório:', error);
+        console.error('❌ Erro:', error);
     }
 }
 
@@ -594,8 +555,15 @@ if ('serviceWorker' in navigator) {
         .catch(err => console.log('❌ Erro ao registrar Service Worker:', err));
 }
 
-// Inicializar aplicação quando a página carregar
-window.addEventListener('DOMContentLoaded', () => {
+// Inicializar aplicação
+window.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Iniciando aplicação...');
-    initDB();
+    try {
+        await initDB();
+        await inicializarInterface();
+        console.log('✅ Aplicação pronta!');
+    } catch (error) {
+        console.error('❌ Erro fatal:', error);
+        alert('Erro ao inicializar o sistema. Por favor, recarregue a página.');
+    }
 });
