@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4CAF50">
+    <title>Controle de Parcelas</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="icon-192.png">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💳 Controle de Parcelas</h1>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="compras">Compras</button>
+            <button class="tab" data-tab="pessoas">Pessoas</button>
+            <button class="tab" data-tab="relatorio">Relatório</button>
+        </nav>
+
+        <!-- ABA COMPRAS -->
+        <section id="compras-tab" class="tab-content active">
+            <div class="card">
+                <h2>Nova Compra</h2>
+                <form id="form-compra">
+                    <div class="form-group">
+                        <label>Pessoa:</label>
+                        <select id="pessoa-select" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição:</label>
+                        <input type="text" id="descricao" required placeholder="Ex: Notebook Dell">
+                    </div>
+                    <div class="form-group">
+                        <label>Valor Total:</label>
+                        <input type="number" id="valor" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Número de Parcelas:</label>
+                        <input type="number" id="parcelas" min="1" required placeholder="Ex: 12">
+                    </div>
+                    <div class="form-group">
+                        <label>Data da Compra:</label>
+                        <input type="date" id="data-compra" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Adicionar Compra</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Compras Cadastradas</h2>
+                <div class="filter-group">
+                    <label>Filtrar por mês:</label>
+                    <input type="month" id="filtro-mes">
+                    <button id="btn-limpar-filtro" class="btn btn-secondary">Todas</button>
+                </div>
+                <div id="lista-compras"></div>
+            </div>
+        </section>
+
+        <!-- ABA PESSOAS -->
+        <section id="pessoas-tab" class="tab-content">
+            <div class="card">
+                <h2>Cadastrar Pessoa</h2>
+                <form id="form-pessoa">
+                    <div class="form-group">
+                        <label>Nome:</label>
+                        <input type="text" id="nome-pessoa" required placeholder="Ex: João">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Adicionar Pessoa</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Pessoas Cadastradas</h2>
+                <div id="lista-pessoas"></div>
+            </div>
+        </section>
+
+        <!-- ABA RELATÓRIO -->
+        <section id="relatorio-tab" class="tab-content">
+            <div class="card">
+                <h2>Relatório Mensal</h2>
+                <div class="form-group">
+                    <label>Selecione o mês:</label>
+                    <input type="month" id="relatorio-mes">
+                </div>
+                <div id="relatorio-conteudo"></div>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
