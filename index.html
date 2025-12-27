@@ -18,17 +18,24 @@
         <nav class="tabs">
             <button class="tab active" data-tab="compras">Compras</button>
             <button class="tab" data-tab="pessoas">Pessoas</button>
+            <button class="tab" data-tab="cartoes">Cartões</button>
             <button class="tab" data-tab="relatorio">Relatório</button>
         </nav>
 
         <!-- ABA COMPRAS -->
         <section id="compras-tab" class="tab-content active">
             <div class="card">
-                <h2>Nova Compra</h2>
+                <h2>➕ Nova Compra</h2>
                 <form id="form-compra">
                     <div class="form-group">
                         <label>Pessoa:</label>
                         <select id="pessoa-select" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cartão:</label>
+                        <select id="cartao-select" required>
                             <option value="">Selecione...</option>
                         </select>
                     </div>
@@ -53,11 +60,11 @@
             </div>
 
             <div class="card">
-                <h2>Compras Cadastradas</h2>
+                <h2>📋 Compras Cadastradas</h2>
                 <div class="filter-group">
-                    <label>Filtrar por mês:</label>
+                    <label>🔍 Filtrar por mês:</label>
                     <input type="month" id="filtro-mes">
-                    <button id="btn-limpar-filtro" class="btn btn-secondary">Todas</button>
+                    <button id="btn-limpar-filtro" class="btn btn-secondary">Ver Todas</button>
                 </div>
                 <div id="lista-compras"></div>
             </div>
@@ -66,7 +73,7 @@
         <!-- ABA PESSOAS -->
         <section id="pessoas-tab" class="tab-content">
             <div class="card">
-                <h2>Cadastrar Pessoa</h2>
+                <h2>➕ Cadastrar Pessoa</h2>
                 <form id="form-pessoa">
                     <div class="form-group">
                         <label>Nome:</label>
@@ -77,15 +84,45 @@
             </div>
 
             <div class="card">
-                <h2>Pessoas Cadastradas</h2>
+                <h2>👥 Pessoas Cadastradas</h2>
                 <div id="lista-pessoas"></div>
+            </div>
+        </section>
+
+        <!-- ABA CARTÕES -->
+        <section id="cartoes-tab" class="tab-content">
+            <div class="card">
+                <h2>➕ Cadastrar Cartão</h2>
+                <form id="form-cartao">
+                    <div class="form-group">
+                        <label>Nome/Apelido do Cartão:</label>
+                        <input type="text" id="nome-cartao" required placeholder="Ex: Nubank, Itaú, Cartão da Mãe">
+                    </div>
+                    <div class="form-group">
+                        <label>Bandeira (opcional):</label>
+                        <select id="bandeira-cartao">
+                            <option value="">Não informar</option>
+                            <option value="visa">Visa</option>
+                            <option value="mastercard">Mastercard</option>
+                            <option value="elo">Elo</option>
+                            <option value="amex">American Express</option>
+                            <option value="hipercard">Hipercard</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Adicionar Cartão</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>💳 Cartões Cadastrados</h2>
+                <div id="lista-cartoes"></div>
             </div>
         </section>
 
         <!-- ABA RELATÓRIO -->
         <section id="relatorio-tab" class="tab-content">
             <div class="card">
-                <h2>Relatório Mensal</h2>
+                <h2>📊 Relatório Mensal</h2>
                 <div class="form-group">
                     <label>Selecione o mês:</label>
                     <input type="month" id="relatorio-mes">
@@ -94,7 +131,6 @@
             </div>
         </section>
     </div>
-
 
     <script src="app.js"></script>
 </body>
